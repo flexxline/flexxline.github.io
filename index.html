@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLEXLINE | SYSTEM OVERRIDE</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700;800&family=Roboto+Mono:wght@400;500;700&display=swap');
+
+:root {
+    --bg-dark: #050505;
+    --panel-bg: rgba(10, 10, 12, 0.85);
+    --neon-green: #00ff9d;
+    --neon-purple: #bc13fe;
+    --text-main: #e0e0e0;
+    --text-dim: #606060;
+    --border-color: rgba(0, 255, 157, 0.2);
+    --font-display: 'Oxanium', cursive;
+    --font-code: 'Roboto Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-main);
+    font-family: var(--font-display);
+    overflow-x: hidden;
+    width: 100vw;
+    position: relative;
+}
+
+#boot-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: #000; z-index: 999999;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    font-family: var(--font-code); color: var(--neon-green);
+}
+.boot-text { font-size: 1.2rem; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--neon-green); }
+.progress-bar { width: 300px; height: 2px; background: #111; position: relative; overflow: hidden; }
+.progress-fill { 
+    position: absolute; top: 0; left: 0; height: 100%; width: 0%; 
+    background: var(--neon-green); box-shadow: 0 0 15px var(--neon-green);
+}
+
+#cursor {
+    position: fixed; top: 0; left: 0; width: 20px; height: 20px;
+    border: 2px solid var(--neon-green); transform: translate(-50%, -50%) rotate(45deg);
+    pointer-events: none; z-index: 100000; mix-blend-mode: difference;
+    transition: width 0.3s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+#cursor-dot {
+    position: fixed; top: 0; left: 0; width: 4px; height: 4px;
+    background: var(--neon-green); transform: translate(-50%, -50%);
+    pointer-events: none; z-index: 100000;
+}
+body:hover #cursor { opacity: 1; }
+.hover-target #cursor { width: 50px; height: 50px; background: rgba(0,255,157,0.05); border-width: 1px; }
+
+
+#canvas-webgl {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 1; 
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.scanlines {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+    background-size: 100% 3px; pointer-events: none; z-index: 999; opacity: 0.4;
+}
+.rgb-split {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.8) 100%);
+    box-shadow: inset 0 0 100px rgba(0,0,0,0.9);
+    z-index: 2; pointer-events: none;
+}
+
+nav {
+    position: fixed; top: 0; width: 100%; padding: 25px 50px;
+    display: flex; justify-content: space-between; align-items: center;
+    z-index: 100; backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    background: linear-gradient(180deg, rgba(5,5,5,0.9) 0%, rgba(5,5,5,0.7) 100%);
+}
+.logo { 
+    font-size: 2rem; font-weight: 800; letter-spacing: -1px; 
+    color: #fff; text-shadow: 0 0 20px rgba(0,255,157,0.4);
+    display: flex; align-items: center; gap: 12px;
+}
+.logo-icon { color: var(--neon-green); font-size: 1.6rem; animation: pulse 3s infinite; }
+
+@keyframes pulse {
+    0% { opacity: 1; text-shadow: 0 0 10px var(--neon-green); }
+    50% { opacity: 0.7; text-shadow: 0 0 2px var(--neon-green); }
+    100% { opacity: 1; text-shadow: 0 0 10px var(--neon-green); }
+}
+
+.status-badge {
+    padding: 6px 18px; border: 1px solid var(--neon-green);
+    color: var(--neon-green); font-family: var(--font-code); font-size: 0.75rem;
+    text-transform: uppercase; background: rgba(0,255,157,0.03);
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+    letter-spacing: 1px;
+}
+
+.hero {
+    min-height: 55vh; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center;
+    padding: 150px 20px 20px; position: relative; z-index: 10;
+}
+.hero h1 {
+    font-size: clamp(3.5rem, 8vw, 7rem); line-height: 0.85; text-transform: uppercase;
+    font-weight: 800; margin-bottom: 25px; position: relative;
+    background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 30px rgba(0,255,157,0.1));
+}
+.hero-subtitle {
+    color: var(--neon-green); font-family: var(--font-code); 
+    font-size: 0.9rem; letter-spacing: 4px; margin-bottom: 15px; opacity: 0.8;
+}
+
+
+.info-panel-wrapper {
+    width: 100%; max-width: 1200px; margin: 0 auto 60px; padding: 0 20px;
+    position: relative; z-index: 10;
+}
+.info-panel {
+    background: rgba(15, 15, 20, 0.7);
+    border: 1px solid rgba(0, 255, 157, 0.3);
+    backdrop-filter: blur(10px);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    position: relative; overflow: hidden;
+}
+.info-panel::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+}
+.info-item {
+    padding: 30px 20px; text-align: center; border-right: 1px solid rgba(255,255,255,0.05);
+    transition: 0.3s; position: relative;
+}
+.info-item:last-child { border-right: none; }
+.info-item:hover { background: rgba(0,255,157,0.02); }
+.info-item i {
+    font-size: 1.8rem; color: var(--neon-green); margin-bottom: 15px;
+    filter: drop-shadow(0 0 8px rgba(0,255,157,0.4));
+}
+.info-item h4 { font-size: 0.9rem; font-weight: 700; color: #fff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; }
+.info-item p { font-size: 0.75rem; color: #777; font-family: var(--font-code); margin: 0; }
+
+.store-wrapper {
+    display: flex; max-width: 1600px; margin: 0 auto; padding: 20px 20px 80px; gap: 50px;
+    position: relative; z-index: 10;
+}
+
+.sidebar {
+    width: 260px; flex-shrink: 0; position: sticky; top: 120px; height: fit-content;
+}
+.sidebar-title {
+    font-family: var(--font-code); color: #444; font-size: 0.7rem; 
+    margin-bottom: 20px; padding-left: 10px; border-left: 2px solid var(--neon-green);
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.cat-btn {
+    width: 100%; padding: 14px 20px; margin-bottom: 6px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.03); text-align: left;
+    color: #777; font-family: var(--font-display); font-weight: 600; text-transform: uppercase;
+    transition: all 0.2s ease-out; position: relative; overflow: hidden;
+    font-size: 0.9rem; letter-spacing: 1px;
+}
+.cat-btn::before {
+    content: ''; position: absolute; left: 0; top: 0; width: 3px; height: 100%;
+    background: var(--neon-green); transform: scaleY(0); transition: 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.cat-btn:hover { color: #fff; padding-left: 28px; background: rgba(255,255,255,0.05); }
+.cat-btn:hover::before { transform: scaleY(1); }
+.cat-btn.active {
+    background: rgba(0,255,157,0.08); color: var(--neon-green); border-color: rgba(0,255,157,0.3);
+    padding-left: 28px; box-shadow: 0 0 25px rgba(0,255,157,0.05);
+}
+.cat-btn.active::before { transform: scaleY(1); }
+
+.main-content { flex: 1; }
+.section-header {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-bottom: 40px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 15px;
+}
+.current-cat-title { font-size: 3rem; font-weight: 700; color: #fff; line-height: 1; }
+.current-cat-meta { font-family: var(--font-code); color: var(--neon-green); font-size: 0.75rem; letter-spacing: 2px; opacity: 0.8; }
+
+.products-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 25px;
+}
+
+.product-card {
+    background: var(--panel-bg); border: 1px solid rgba(255,255,255,0.05);
+    padding: 30px; display: flex; flex-direction: column; position: relative;
+    transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); backdrop-filter: blur(12px);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 25px), calc(100% - 25px) 100%, 0 100%);
+}
+.product-card:hover {
+    transform: translateY(-8px); border-color: var(--neon-green);
+    box-shadow: 0 20px 50px -20px rgba(0,255,157,0.15);
+}
+.product-card::after {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.03) 50%, transparent 70%);
+    background-size: 200% 100%; animation: shine 5s infinite linear; pointer-events: none;
+}
+@keyframes shine { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+.prod-name { font-size: 1.3rem; font-weight: 700; color: #fff; margin-bottom: 8px; }
+.prod-desc { font-family: var(--font-code); font-size: 0.85rem; color: #888; line-height: 1.6; min-height: 45px; }
+.price-tag {
+    font-family: var(--font-code); color: var(--neon-green); font-size: 1.1rem; 
+    font-weight: 600; margin: 25px 0; display: block; text-shadow: 0 0 10px rgba(0,255,157,0.3);
+}
+.action-btn {
+    width: 100%; padding: 14px; background: transparent;
+    border: 1px solid #444; color: #fff; font-family: var(--font-display);
+    font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    transition: 0.3s; position: relative; overflow: hidden;
+    font-size: 0.85rem; z-index: 1;
+}
+.action-btn::after {
+    content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+    background: #fff; transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1); z-index: -1;
+}
+.action-btn:hover { color: #000; border-color: #fff; }
+.action-btn:hover::after { left: 0; }
+
+.action-btn.ticket { border-color: var(--neon-purple); color: var(--neon-purple); }
+.action-btn.ticket:hover { color: #fff; }
+.action-btn.ticket::after { background: var(--neon-purple); }
+
+.modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.95); z-index: 20000;
+    display: flex; justify-content: center; align-items: center;
+    opacity: 0; pointer-events: none; transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+    backdrop-filter: blur(5px);
+}
+.modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+.modal-terminal {
+    width: 550px; background: #080808; border: 1px solid var(--neon-green);
+    box-shadow: 0 0 80px rgba(0,255,157,0.1); padding: 0;
+    transform: scale(0.9) translateY(20px); transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1); 
+    position: relative;
+}
+.modal-overlay.active .modal-terminal { transform: scale(1) translateY(0); }
+
+.term-header {
+    background: rgba(0,255,157,0.08); padding: 12px 25px;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border-color);
+}
+.term-title { font-family: var(--font-code); color: var(--neon-green); font-size: 0.85rem; letter-spacing: 1px; }
+.close-term { color: #666; font-size: 1.1rem; transition: 0.2s; }
+.close-term:hover { color: #fff; transform: rotate(90deg); }
+
+.term-body { padding: 40px; }
+
+.checkout-details {
+    margin-bottom: 30px; border: 1px dashed #333; padding: 25px; background: rgba(255,255,255,0.01);
+}
+.detail-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-family: var(--font-code); color: #888; font-size: 0.9rem; }
+.detail-row.final {
+    margin-top: 20px; padding-top: 20px; border-top: 1px solid #333;
+    color: #fff; font-size: 1.1rem; font-weight: bold;
+}
+.highlight-price { color: var(--neon-green); text-shadow: 0 0 10px rgba(0,255,157,0.4); }
+
+.payment-link-box {
+    background: #000; border: 1px solid #333; display: flex; margin: 15px 0 30px;
+}
+.link-display {
+    flex: 1; padding: 15px; font-family: var(--font-code); color: var(--neon-green);
+    font-size: 0.9rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.copy-btn {
+    padding: 0 30px; background: #151515; border: none; border-left: 1px solid #333;
+    color: #fff; font-family: var(--font-display); font-weight: bold; transition: 0.2s; cursor: none;
+}
+.copy-btn:hover { background: var(--neon-green); color: #000; }
+
+.discord-cta {
+    display: block; width: 100%; padding: 16px; background: #5865F2;
+    color: #fff; text-align: center; text-decoration: none; font-weight: bold;
+    font-family: var(--font-display); transition: 0.3s;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    letter-spacing: 1px;
+}
+.discord-cta:hover { background: #4752C4; box-shadow: 0 0 30px rgba(88,101,242,0.3); }
+
+@media (max-width: 900px) {
+    .store-wrapper { flex-direction: column; padding: 20px; }
+    .sidebar { width: 100%; position: relative; top: 0; margin-bottom: 40px; }
+    .cat-btn { padding: 12px; font-size: 0.85rem; }
+    .hero h1 { font-size: 3rem; }
+    .modal-terminal { width: 95%; margin: 0 auto; }
+    .info-panel { grid-template-columns: 1fr; border: none; background: transparent; gap: 15px; }
+    .info-item { border: 1px solid rgba(255,255,255,0.1); background: rgba(10,10,12,0.8); }
+    .info-item:last-child { border-right: 1px solid rgba(255,255,255,0.1); }
+}
+</style>
+</head>
+<body>
+
+<div id="boot-screen">
+    <div class="boot-text">INITIALIZING SECURE ENVIRONMENT...</div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+</div>
+
+<div id="cursor"></div>
+<div id="cursor-dot"></div>
+<div class="scanlines"></div>
+<div class="rgb-split"></div>
+<canvas id="canvas-webgl"></canvas>
+
+<nav>
+    <div class="logo">
+        <i class="fas fa-biohazard logo-icon"></i>
+        FLEXLINE
+    </div>
+    <div class="status-badge">
+        <i class="fas fa-signal" style="font-size:0.6rem; margin-right:8px;"></i> SYSTEM ONLINE
+    </div>
+</nav>
+
+<div class="modal-overlay" id="modal">
+    <div class="modal-terminal">
+        <div class="term-header">
+            <span class="term-title">/// GATEWAY_V3.1_SECURE</span>
+            <div class="close-term" onclick="closeModal()">✕</div>
+        </div>
+        <div class="term-body">
+            <h3 style="color:#fff; margin-bottom:25px; font-size:1.4rem; letter-spacing:1px;">TRANSACTION PENDING</h3>
+            
+            <div class="checkout-details">
+                <div class="detail-row">
+                    <span>PRODUCT:</span>
+                    <span id="m-name" style="color:#fff">...</span>
+                </div>
+                <div class="detail-row final">
+                    <span>TRANSFER AMOUNT:</span>
+                    <span class="highlight-price" id="m-total">$0.00</span>
+                </div>
+                <div style="font-size:0.7rem; color:#555; margin-top:8px; text-align:right; font-family:var(--font-code);">
+                    [ AUTOMATED FEE CALCULATION INCLUDED ]
+                </div>
+            </div>
+
+            <p style="color:#bbb; font-size:0.85rem; margin-bottom:8px; font-family:var(--font-code);">1. EXECUTE PAYMENT VIA MERCADOPAGO:</p>
+            <div class="payment-link-box hover-target">
+                <div class="link-display">link.mercadopago.com.ar/flexline</div>
+                <button class="copy-btn" onclick="copyLink(this)">COPY</button>
+            </div>
+
+            <p style="color:#bbb; font-size:0.85rem; margin-bottom:25px; font-family:var(--font-code);">2. UPLOAD RECEIPT EVIDENCE.</p>
+
+            <a href="https://discord.gg/QPFppC5P7a" target="_blank" class="discord-cta hover-target">
+                <i class="fab fa-discord"></i> OPEN SUPPORT TICKET
+            </a>
+        </div>
+    </div>
+</div>
+
+<section class="hero">
+    <div class="hero-subtitle">/// ELITE SOFTWARE SOLUTIONS</div>
+    <h1>SYSTEM<br>OVERRIDE</h1>
+</section>
+
+
+<div class="info-panel-wrapper">
+    <div class="info-panel">
+        <div class="info-item hover-target">
+            <i class="fas fa-headset"></i>
+            <h4>ATENCIÓN 24/7</h4>
+            <p>SOPORTE TÉCNICO ACTIVO</p>
+        </div>
+        <div class="info-item hover-target">
+            <i class="fas fa-bolt"></i>
+            <h4>ENTREGA INSTANTÁNEA</h4>
+            <p>AUTOMATIZADO & RÁPIDO</p>
+        </div>
+        <div class="info-item hover-target">
+            <i class="fas fa-shield-halved"></i>
+            <h4>PAGOS SEGUROS</h4>
+            <p>TRANSACCIONES CIFRADAS</p>
+        </div>
+        <div class="info-item hover-target">
+            <i class="fas fa-check-circle"></i>
+            <h4>GARANTÍA ACTIVA</h4>
+            <p>REPOSICIÓN ASEGURADA</p>
+        </div>
+    </div>
+</div>
+
+<div class="store-wrapper">
+    <div class="sidebar">
+        <div class="sidebar-title">COMMAND_CENTER</div>
+        <div id="sidebar-container"></div>
+    </div>
+
+    <div class="main-content">
+        <div class="section-header">
+            <h2 class="current-cat-title" id="cat-title">ACCOUNTS</h2>
+            <span class="current-cat-meta">/// DATABASE_ACCESS_GRANTED</span>
+        </div>
+        <div class="products-grid" id="grid"></div>
+    </div>
+</div>
+
+<script>
+    window.addEventListener('load', () => {
+        gsap.to('.progress-fill', { width: '100%', duration: 1.2, ease: 'power4.inOut', onComplete: () => {
+            gsap.to('#boot-screen', { opacity: 0, duration: 0.5, onComplete: () => {
+                document.getElementById('boot-screen').style.display = 'none';
+            }});
+        }});
+        
+        gsap.from('.info-panel', {
+            y: 30, opacity: 0, duration: 1, ease: 'power3.out', delay: 1.2
+        });
+    });
+
+    const storeData = {
+        "Accounts": [
+            { name: "Rockstar Account", price: "1 USD", desc: "Full access account ready for deployment." },
+            { name: "Discord Token/Acc", price: "0.30 USD", desc: "Aged or verified account." },
+            { name: "Steam Account", price: "0.10 USD", desc: "Random steam account." },
+            { name: "IPVANISH VPN", price: "1 USD", desc: "Premium encrypted connection." },
+            { name: "TunnelBear VPN", price: "1 USD", desc: "Premium encrypted connection." },
+            { name: "Nord VPN", price: "3 USD", desc: "Premium encrypted connection." }
+        ],
+        "Games Accounts": [
+            { name: "Steam Panel", price: "3 USD", desc: "Full management panel access." },
+            { name: "Fortnite Account", price: "TICKET", desc: "Inventory varies. Inquire in Discord." },
+            { name: "Valorant Account", price: "TICKET", desc: "Rank varies. Inquire in Discord." },
+            { name: "Minecraft Premium", price: "10 USD", desc: "Full Access Java/Bedrock Edition." },
+            { name: "CS2 Prime (0-1k Hrs)", price: "4,500 ARS / 3 USD", desc: "Medals included 0-4." },
+            { name: "CS2 Prime (1k-4k Hrs)", price: "7,500 ARS / 5 USD", desc: "Medals included 4-8." }
+        ],
+        "Host Products": [
+            { name: "Host External (3 Days)", price: "4,499 ARS / 4 USD", desc: "High performance server." },
+            { name: "Host External (Weekly)", price: "6,499 ARS / 6 USD", desc: "High performance server." },
+            { name: "Host External (Monthly)", price: "13,999 ARS / 13 USD", desc: "High performance server." },
+            { name: "Host External (Lifetime)", price: "24,999 ARS / 25 USD", desc: "Permanent server access." }
+        ],
+        "Saytus": [
+            { name: "Saytus External (Daily)", price: "2,499 ARS / 3 USD", desc: "Undetected external cheat." },
+            { name: "Saytus External (Weekly)", price: "7,499 ARS / 5 USD", desc: "Undetected external cheat." },
+            { name: "Saytus External (Monthly)", price: "12,499 ARS / 10 USD", desc: "Undetected external cheat." },
+            { name: "Saytus External (3M)", price: "19,999 ARS / 15 USD", desc: "Undetected external cheat." },
+            { name: "Saytus External (Lifetime)", price: "29,999 ARS / 30 USD", desc: "Undetected external cheat." },
+            { name: "Saytus Woofer (Daily)", price: "4,999 ARS / 5 USD", desc: "Hardware ID Protection." },
+            { name: "Saytus Woofer (Weekly)", price: "9,999 ARS / 10 USD", desc: "Hardware ID Protection." },
+            { name: "Saytus Woofer (Monthly)", price: "17,499 ARS / 17.5 USD", desc: "Hardware ID Protection." },
+            { name: "Saytus Woofer (Lifetime)", price: "24,999 ARS / 30 USD", desc: "Hardware ID Protection." },
+            { name: "Saytus One Click (Daily)", price: "2,999 ARS / 4 USD", desc: "System Optimizer." },
+            { name: "Saytus One Click (Weekly)", price: "7,499 ARS / 8 USD", desc: "System Optimizer." },
+            { name: "Saytus One Click (Monthly)", price: "12,499 ARS / 15 USD", desc: "System Optimizer." },
+            { name: "Saytus One Click (Lifetime)", price: "24,999 ARS / 30 USD", desc: "System Optimizer." }
+        ],
+        "FiveM": [
+            { name: "GHOST MENU", price: "TICKET", desc: "Undetected Menu." },
+            { name: "Shark Menu (Weekly)", price: "7,850 ARS / 6 USD", desc: "Feature rich executor." },
+            { name: "Shark Menu (Monthly)", price: "14,999 ARS / 10 USD", desc: "Feature rich executor." },
+            { name: "Shark Menu (3M)", price: "29,999 ARS / 20 USD", desc: "Feature rich executor." },
+            { name: "Shark Menu (Lifetime)", price: "57,999 ARS / 40 USD", desc: "Feature rich executor." },
+            { name: "027 Woofer (Day)", price: "1,999 ARS / 2 USD", desc: "FiveM Spoofer." },
+            { name: "027 Woofer (Weekly)", price: "7,799 ARS / 10 USD", desc: "FiveM Spoofer." },
+            { name: "027 Woofer (Monthly)", price: "15,999 ARS / 16 USD", desc: "FiveM Spoofer." },
+            { name: "027 Woofer (Lifetime)", price: "29,999 ARS / 30 USD", desc: "FiveM Spoofer." }
+        ],
+        "CSGO / CS2": [
+            { name: "Predator (1 Day)", price: "4,445 ARS / 3 USD", desc: "Legit/Rage configuration." },
+            { name: "Predator (Weekly)", price: "7,425 ARS / 5 USD", desc: "Legit/Rage configuration." },
+            { name: "Predator (Monthly)", price: "10,999 ARS / 8 USD", desc: "Legit/Rage configuration." },
+            { name: "Predator (3M)", price: "21,999 ARS / 20 USD", desc: "Legit/Rage configuration." },
+            { name: "NIXWARE (1 Day)", price: "4,425 ARS / 3 USD", desc: "HvH Dominator." },
+            { name: "NIXWARE (14 Days)", price: "7,375 ARS / 5 USD", desc: "HvH Dominator." },
+            { name: "NIXWARE (Monthly)", price: "11,800 ARS / 8 USD", desc: "HvH Dominator." },
+            { name: "NIXWARE (2 Months)", price: "17,999 ARS / 15 USD", desc: "HvH Dominator." },
+            { name: "NIXWARE (3 Months)", price: "28,999 ARS / 25 USD", desc: "HvH Dominator." }
+        ],
+        "Valorant": [
+            { name: "Valorant Cheat (Day)", price: "7,375 ARS / 5 USD", desc: "ESP/Aimbot Visuals." },
+            { name: "Valorant Cheat (Weekly)", price: "14,750 ARS / 10 USD", desc: "ESP/Aimbot Visuals." },
+            { name: "Valorant Cheat (Monthly)", price: "29,500 ARS / 20 USD", desc: "ESP/Aimbot Visuals." },
+            { name: "Valorant Cheat (Lifetime)", price: "59,000 ARS / 40 USD", desc: "ESP/Aimbot Visuals." },
+            { name: "Skin Changer (Daily)", price: "5,999 ARS / 4 USD", desc: "Unlock all skins locally." },
+            { name: "Skin Changer (Weekly)", price: "15,999 ARS / 8 USD", desc: "Unlock all skins locally." },
+            { name: "Skin Changer (Monthly)", price: "21,999 ARS / 20 USD", desc: "Unlock all skins locally." },
+            { name: "Skin Changer (Lifetime)", price: "52,999 ARS / 35 USD", desc: "Unlock all skins locally." }
+        ],
+        "Tools": [
+            { name: "Bot Ventas (Monthly)", price: "4,999 ARS", desc: "Automated sales bot." },
+            { name: "Bot Ventas (Source)", price: "29,999 ARS", desc: "Source code ownership." },
+            { name: "Bot Machine (Monthly)", price: "6,999 ARS / 5 USD", desc: "Advanced hosting bot." },
+            { name: "Bot Machine (Source)", price: "39,999 ARS / 30 USD", desc: "Source code ownership." },
+            { name: "Gen Mails (Generator)", price: "1,000 ARS", desc: "Email Generator." },
+            { name: "Tool Boost (Source)", price: "5,999 ARS / 7 USD", desc: "Boost tool source." },
+            { name: "Host Raid (Source)", price: "1,999 ARS / 2 USD", desc: "Raid tool source." }
+        ],
+        "Reseller": [
+            { name: "Plan Reseller", price: "3,499 ARS / 2 USD", desc: "Reseller permissions." }
+        ],
+        "Streaming Accounts": [
+            { name: "Netflix Account", price: "1,500 ARS / 1 USD", desc: "Shared profile." },
+            { name: "Crunchyroll", price: "999 ARS / 1 USD", desc: "Anime streaming." },
+            { name: "Spotify", price: "2,999 ARS / 3 USD", desc: "Music streaming." },
+            { name: "Disney Plus", price: "999 ARS / 1 USD", desc: "Movies & Shows." },
+            { name: "HBO MAX", price: "1,500 ARS / 1 USD", desc: "Movies & Shows." },
+            { name: "Paramount", price: "999 ARS / 1 USD", desc: "Movies & Shows." },
+            { name: "YouTube Premium", price: "2,999 ARS / 2 USD", desc: "Ad-free experience." },
+            { name: "CapCut Pro", price: "2,499 ARS / 1 USD", desc: "Editing tools." },
+            { name: "ChatGPT Plus", price: "4,999 ARS / 5 USD", desc: "AI Access." }
+        ],
+        "Streaming Svc": [
+            { name: "Follow Panel", price: "2,000 ARS (Convert to USD)", desc: "Growth management." },
+            { name: "YT Views (1k)", price: "2,500 ARS / 3 USD", desc: "High retention." },
+            { name: "Insta Followers (1k)", price: "4,999 ARS / 5 USD", desc: "Global accounts." },
+            { name: "TikTok Followers (1k)", price: "3,500 ARS / 3.5 USD", desc: "Fast delivery." },
+            { name: "Discord Offline (1k)", price: "8,500 ARS / 8 USD", desc: "Server members." },
+            { name: "Discord Online (1k)", price: "15,500 ARS / 15 USD", desc: "Active members." }
+        ],
+        "Banners": [
+            { name: "Simple Banner", price: "2,000 ARS", desc: "Static design." },
+            { name: "Clean Banner", price: "2,500 ARS", desc: "Minimalist design." },
+            { name: "Professional Edit", price: "4,000 ARS", desc: "Complex VFX design." }
+        ],
+        "Discord Products": [
+            { name: "Nitro Gift (Month)", price: "5,999 ARS / 4 USD", desc: "Legit, fresh links." },
+            { name: "Nitro Gift (Year)", price: "25,999 ARS / 25 USD", desc: "Legit, fresh links." },
+            { name: "Server Boost 1M (x14)", price: "6,999 ARS / 4.5 USD", desc: "Warranty included." },
+            { name: "Server Boost 3M (x14)", price: "15,999 ARS / 10 USD", desc: "Warranty included." },
+            { name: "Decoration ($4.99)", price: "3,500 ARS / 2.6 USD", desc: "Profile decoration." }
+        ]
+    };
+
+    const sidebarContainer = document.getElementById('sidebar-container');
+    const grid = document.getElementById('grid');
+    const catTitle = document.getElementById('cat-title');
+    let activeCategory = "Accounts";
+
+    const scrambleText = (element, finalWord) => {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()";
+        let iterations = 0;
+        const interval = setInterval(() => {
+            element.innerText = finalWord.split("").map((letter, index) => {
+                if(index < iterations) return finalWord[index];
+                return chars[Math.floor(Math.random() * chars.length)];
+            }).join("");
+            
+            if(iterations >= finalWord.length) clearInterval(interval);
+            iterations += 1/3; 
+        }, 30);
+    };
+
+    function renderSidebar() {
+        sidebarContainer.innerHTML = "";
+        Object.keys(storeData).forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = `cat-btn hover-target ${cat === activeCategory ? 'active' : ''}`;
+            btn.innerText = cat;
+            btn.onmouseenter = () => scrambleText(btn, cat);
+            btn.onclick = () => loadCategory(cat);
+            sidebarContainer.appendChild(btn);
+        });
+    }
+
+    function loadCategory(cat) {
+        if(activeCategory === cat) return;
+        activeCategory = cat;
+        scrambleText(catTitle, cat);
+        renderSidebar();
+        
+        gsap.to(grid, { opacity: 0, x: -20, duration: 0.2, onComplete: () => {
+            renderGrid(cat);
+            gsap.to(grid, { opacity: 1, x: 0, duration: 0.3, stagger: 0.05 });
+        }});
+    }
+
+    function renderGrid(cat) {
+        grid.innerHTML = "";
+        storeData[cat].forEach((prod, i) => {
+            const isTicket = prod.price === "TICKET";
+            const card = document.createElement('div');
+            card.className = "product-card hover-target";
+            card.style.animationDelay = `${i * 50}ms`;
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="prod-name">${prod.name}</div>
+                    <div class="prod-desc">${prod.desc}</div>
+                </div>
+                <div>
+                    <span class="price-tag">${prod.price}</span>
+                    <button class="action-btn ${isTicket ? 'ticket' : ''}"
+                        onclick="${isTicket ? "window.open('https://discord.gg/QPFppC5P7a', '_blank')" : `calculateAndOpenModal('${prod.name}', '${prod.price}')`}">
+                        ${isTicket ? 'CONTACT SUPPORT' : 'PURCHASE'}
+                    </button>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    const modal = document.getElementById('modal');
+
+    function calculateAndOpenModal(name, priceStr) {
+        const cleanStr = priceStr.replace(/\./g, '').replace(/,/g, ''); 
+        const arsMatch = cleanStr.match(/(\d+)\s*ARS/);
+        const usdMatch = cleanStr.match(/(\d+(\.\d+)?)\s*USD/);
+
+        let finalDisplay = "";
+
+        if (arsMatch) {
+            const baseArs = parseFloat(arsMatch[1]);
+            const finalArs = Math.ceil(baseArs * 1.10);
+            finalDisplay += `${finalArs.toLocaleString('es-AR')} ARS`;
+        }
+
+        if (usdMatch) {
+            if (finalDisplay !== "") finalDisplay += "  /  ";
+            const baseUsd = parseFloat(usdMatch[1]);
+            const finalUsd = (baseUsd * 1.10).toFixed(2);
+            finalDisplay += `${finalUsd} USD`;
+        }
+
+        if (finalDisplay === "") finalDisplay = priceStr + " + 10%";
+
+        document.getElementById('m-name').innerText = name;
+        document.getElementById('m-total').innerText = finalDisplay;
+        modal.classList.add('active');
+    }
+
+    function closeModal() {
+        modal.classList.remove('active');
+    }
+    
+    document.addEventListener('keydown', (e) => { if(e.key === 'Escape') closeModal(); });
+
+    function copyLink(btn) {
+        const textArea = document.createElement("textarea");
+        textArea.value = "link.mercadopago.com.ar/flexline";
+        textArea.style.position = "fixed"; textArea.style.left = "-9999px";
+        document.body.appendChild(textArea);
+        textArea.focus(); textArea.select();
+        try {
+            document.execCommand('copy');
+            const original = btn.innerText;
+            btn.innerText = "COPIED";
+            btn.style.color = "#00ff9d";
+            setTimeout(() => {
+                btn.innerText = original;
+                btn.style.color = "#fff";
+            }, 2000);
+        } catch(e){}
+        document.body.removeChild(textArea);
+    }
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas-webgl'), alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const particleCount = 200;
+    const particles = new THREE.BufferGeometry();
+    const pos = new Float32Array(particleCount * 3);
+    const velocity = [];
+    
+    for(let i=0; i<particleCount; i++) {
+        pos[i * 3] = (Math.random() - 0.5) * 40;
+        pos[i * 3 + 1] = (Math.random() - 0.5) * 40;
+        pos[i * 3 + 2] = (Math.random() - 0.5) * 40;
+        velocity.push({
+            x: (Math.random() - 0.5) * 0.03,
+            y: (Math.random() - 0.5) * 0.03,
+            z: (Math.random() - 0.5) * 0.03
+        });
+    }
+    
+    particles.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pMaterial = new THREE.PointsMaterial({ color: 0x00ff9d, size: 0.15, transparent: true, opacity: 0.8 });
+    const pMesh = new THREE.Points(particles, pMaterial);
+    scene.add(pMesh);
+
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff9d, transparent: true, opacity: 0.1 });
+    
+    const maxLines = particleCount * particleCount; 
+    const linesGeometry = new THREE.BufferGeometry();
+    const linesPos = new Float32Array(maxLines * 3); 
+    linesGeometry.setAttribute('position', new THREE.BufferAttribute(linesPos, 3));
+    const lines = new THREE.LineSegments(linesGeometry, lineMaterial);
+    lines.frustumCulled = false; 
+    scene.add(lines);
+
+    camera.position.z = 12;
+    
+    let mouseX = 0;
+    let mouseY = 0;
+    document.addEventListener('mousemove', (e) => {
+        mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+        mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+        
+        gsap.to(camera.position, {
+            x: mouseX * 1.5,
+            y: mouseY * 1.5,
+            duration: 1.2,
+            ease: "power2.out"
+        });
+
+        const cursor = document.getElementById('cursor');
+        const dot = document.getElementById('cursor-dot');
+        cursor.style.left = e.clientX + 'px';
+        cursor.style.top = e.clientY + 'px';
+        dot.style.left = e.clientX + 'px';
+        dot.style.top = e.clientY + 'px';
+
+        if(e.target.closest('.hover-target')) {
+            cursor.style.width = '60px';
+            cursor.style.height = '60px';
+            cursor.style.backgroundColor = 'rgba(0,255,157,0.05)';
+        } else {
+            cursor.style.width = '20px';
+            cursor.style.height = '20px';
+            cursor.style.backgroundColor = 'transparent';
+        }
+    });
+
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        const positions = particles.attributes.position.array;
+        
+        
+        for(let i=0; i<particleCount; i++) {
+            positions[i*3] += velocity[i].x;
+            positions[i*3+1] += velocity[i].y;
+            positions[i*3+2] += velocity[i].z;
+            
+            
+            if(Math.abs(positions[i*3]) > 20) velocity[i].x *= -1;
+            if(Math.abs(positions[i*3+1]) > 20) velocity[i].y *= -1;
+            if(Math.abs(positions[i*3+2]) > 20) velocity[i].z *= -1;
+        }
+        particles.attributes.position.needsUpdate = true;
+        
+        
+        let lineVertexIndex = 0;
+        const connectionDist = 5;
+        const linePositionsAttribute = lines.geometry.attributes.position;
+        const linePositionsArray = linePositionsAttribute.array;
+        
+        for(let i=0; i<particleCount; i++) {
+            for(let j=i+1; j<particleCount; j++) {
+                const dx = positions[i*3] - positions[j*3];
+                const dy = positions[i*3+1] - positions[j*3+1];
+                const dz = positions[i*3+2] - positions[j*3+2];
+                const distSq = dx*dx + dy*dy + dz*dz;
+                
+                if(distSq < connectionDist * connectionDist) {
+                     
+                    linePositionsArray[lineVertexIndex++] = positions[i*3];
+                    linePositionsArray[lineVertexIndex++] = positions[i*3+1];
+                    linePositionsArray[lineVertexIndex++] = positions[i*3+2];
+                    
+                    linePositionsArray[lineVertexIndex++] = positions[j*3];
+                    linePositionsArray[lineVertexIndex++] = positions[j*3+1];
+                    linePositionsArray[lineVertexIndex++] = positions[j*3+2];
+                }
+            }
+        }
+        
+        lines.geometry.setDrawRange(0, lineVertexIndex / 3); 
+        linePositionsAttribute.needsUpdate = true;
+        
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    renderSidebar();
+    renderGrid(activeCategory);
+
+</script>
+</body>
+</html>
